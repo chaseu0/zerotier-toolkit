@@ -4,7 +4,7 @@ import { Trans, useTranslation } from 'react-i18next'
 
 import CopyText from '../../../components/base/CopyText.tsx'
 import { CopyIcon } from '../../../components/base/Icon.tsx'
-import { Path, Peer } from '../../../typings/zerotier.ts'
+import { Path, Peer, PeerHistorySample } from '../../../typings/zerotier.ts'
 import { activePaths, connectionChip, isRootPeer, peerConnection, peerLastReceive, peerLatency } from './peerHelpers.ts'
 
 const formatTime = (timestamp?: number) =>
@@ -70,7 +70,72 @@ function PathItem({ path }: { path: Path }) {
   )
 }
 
-function PeerDetailsModal({ peer, onClose }: { peer?: Peer; onClose: () => void }) {
+function PeerHistoryChart({ samples }: { samples: PeerHistorySample[] }) {
+  const { t } = useTranslation()
+  const recentSamples = samples.slice(-30)
+  const latencies = recentSamples.flatMap((sample) => (sample.latency === undefined ? [] : [sample.latency]))
+  const maxLatency = Math.max(1, ...latencies)
+  const average = latencies.length
+    ? Math.round(latencies.reduce((sum, value) => sum + value, 0) / latencies.length)
+    : undefined
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-tiny font-bold uppercase">
+          <Trans>Recent ZeroTier latency</Trans>
+        </p>
+        <span className="text-tiny text-default-500">{t('{{count}} samples', { count: recentSamples.length })}</span>
+      </div>
+      {recentSamples.length ? (
+        <>
+          <div className="flex h-14 items-end gap-[2px]" role="img" aria-label={t('Recent ZeroTier latency')}>
+            {recentSamples.map((sample) => {
+              const latency = sample.latency
+              const height = latency === undefined ? 8 : Math.max(8, (latency / maxLatency) * 100)
+              const color =
+                latency === undefined
+                  ? 'bg-default-300'
+                  : latency >= 150
+                    ? 'bg-danger'
+                    : latency >= 80
+                      ? 'bg-warning'
+                      : 'bg-success'
+              const title = `${new Date(sample.timestamp).toLocaleString()} · ${latency === undefined ? t('No latency data') : `${latency} ms`} · ${t(connectionChip[sample.connection].label)}`
+              return (
+                <div
+                  key={sample.timestamp}
+                  className={`min-w-0 flex-1 rounded-t-sm ${color}`}
+                  style={{ height: `${height}%` }}
+                  title={title}
+                />
+              )
+            })}
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-tiny">
+            <DetailItem label="Min">{latencies.length ? `${Math.min(...latencies)} ms` : '-'}</DetailItem>
+            <DetailItem label="Avg">{average === undefined ? '-' : `${average} ms`}</DetailItem>
+            <DetailItem label="Max">{latencies.length ? `${Math.max(...latencies)} ms` : '-'}</DetailItem>
+          </div>
+        </>
+      ) : (
+        <small className="text-default-500">
+          <Trans>No history samples yet</Trans>
+        </small>
+      )}
+    </div>
+  )
+}
+
+function PeerDetailsModal({
+  peer,
+  history = [],
+  onClose,
+}: {
+  peer?: Peer
+  history?: PeerHistorySample[]
+  onClose: () => void
+}) {
   const { t } = useTranslation()
 
   if (!peer) {
@@ -155,6 +220,8 @@ function PeerDetailsModal({ peer, onClose }: { peer?: Peer; onClose: () => void 
               <Trans>No path</Trans>
             </small>
           )}
+          <Divider className="my-2" />
+          <PeerHistoryChart samples={history} />
         </ModalBody>
       </ModalContent>
     </Modal>

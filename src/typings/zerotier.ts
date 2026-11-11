@@ -127,6 +127,19 @@ export interface Peer {
   versionRev?: number
 }
 
+export type PeerConnectionState = 'direct' | 'relayed' | 'tunneled' | 'idle'
+
+export interface PeerHistorySample {
+  timestamp: number
+  connection: PeerConnectionState
+  activePaths: number
+  latency?: number
+  lastReceive?: number
+  preferredPath?: string
+}
+
+export type PeerHistory = Record<string, PeerHistorySample[]>
+
 export interface Path {
   active?: boolean
   address?: string

@@ -5,17 +5,22 @@ import { Trans, useTranslation } from 'react-i18next'
 import { SearchIcon } from '../../../components/base/Icon.tsx'
 import RefreshButton from '../../../components/base/RefreshButton.tsx'
 import { useZeroTierStore } from '../../../store/zerotier.ts'
+import { ZerotierConfig } from '../../../typings/config.ts'
 import useRequest from '../../../utils/hooks/useRequest.ts'
 import { connectionChip, peerConnection } from './peerHelpers.ts'
 import PeersTable from './PeersTable.tsx'
 
+const AUTO_REFRESH_INTERVAL_MS = 5000
+
 function ZerotierPeers() {
   const { t } = useTranslation()
   const { request } = useRequest()
-  const { peers, getPeers } = useZeroTierStore()
+  const { peers, getPeers, config } = useZeroTierStore()
 
   const [isLoading, setIsLoading] = useState(!peers.length)
   const [isError, setIsError] = useState(false)
+  const [isStale, setIsStale] = useState(false)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number>()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const loadingRef = useRef(false)
 
@@ -30,7 +35,10 @@ function ZerotierPeers() {
     try {
       await request(getPeers())
       setIsError(false)
+      setIsStale(false)
+      setLastUpdatedAt(Date.now())
     } catch {
+      setIsStale(true)
       if (!useZeroTierStore.getState().peers.length) {
         setIsError(true)
       }
@@ -44,6 +52,8 @@ function ZerotierPeers() {
 
   useEffect(() => {
     loadPeers(!useZeroTierStore.getState().peers.length)
+    const interval = window.setInterval(() => loadPeers(), AUTO_REFRESH_INTERVAL_MS)
+    return () => window.clearInterval(interval)
   }, [loadPeers])
 
   const onRefresh = useCallback(async () => {
@@ -70,6 +80,19 @@ function ZerotierPeers() {
         <span className="flex-shrink-0 text-default-700">
           <Trans>Known peers</Trans>
         </span>
+        <Chip
+          size="sm"
+          variant="flat"
+          color={isStale ? 'warning' : 'success'}
+          aria-label={t('Auto-refreshing every {{seconds}} seconds', { seconds: AUTO_REFRESH_INTERVAL_MS / 1000 })}
+        >
+          <Trans>{isStale ? 'Stale' : 'Live'}</Trans>
+        </Chip>
+        {lastUpdatedAt && (
+          <span className="flex-shrink-0 text-tiny text-default-500">
+            {t('Updated at {{time}}', { time: new Date(lastUpdatedAt).toLocaleTimeString() })}
+          </span>
+        )}
         <Chip size="sm" variant="flat" className="flex-shrink-0 bg-default-100">
           {filterValue ? `${filteredPeers.length}/${peers.length}` : peers.length}
         </Chip>
@@ -94,6 +117,7 @@ function ZerotierPeers() {
         isError={isError}
         isRefreshing={isRefreshing}
         onRefresh={onRefresh}
+        history={config[ZerotierConfig.PEER_HISTORY]}
       />
     </div>
   )

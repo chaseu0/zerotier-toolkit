@@ -4,8 +4,9 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import { getNetworks, getPeers, getStatus, leaveNetwork } from '../services/zerotierService.ts'
 import { ConfigType, ZeroTierConfig, ZerotierConfig } from '../typings/config.ts'
 import { InvokeEvent, ServiceStartType, ServiceStatus } from '../typings/enum.ts'
-import { Network, Peer, ServerInfo, Status } from '../typings/zerotier.ts'
+import { Network, Peer, PeerHistory, ServerInfo, Status } from '../typings/zerotier.ts'
 import { createConfigStorage } from '../utils/helpers/configHelpers.ts'
+import { appendPeerHistory } from '../utils/helpers/peerHistory.ts'
 import { invokeCommand } from '../utils/helpers/tauriHelpers.ts'
 
 export type ZeroTierState = {
@@ -28,6 +29,7 @@ export type ZeroTierAction = {
   getServerInfo: () => Promise<ServerInfo>
   getNetworks: () => Promise<Network[]>
   getPeers: () => Promise<Peer[]>
+  recordPeerSamples: (peers: Peer[], sampledAt?: number) => PeerHistory
   disconnectNetwork: (networkId: string) => Promise<void>
   deleteNetwork: (networkId: string) => Promise<void>
   getStatus: () => Promise<Status>
@@ -97,7 +99,19 @@ export const useZeroTierStore = create<ZeroTierState & ZeroTierAction>()(
       getPeers: async () => {
         const { data: peers } = await getPeers()
         set((state) => ({ ...state, peers }))
+        get().recordPeerSamples(peers)
         return peers
+      },
+      recordPeerSamples: (peers, sampledAt = Date.now()) => {
+        const history = get().config[ZerotierConfig.PEER_HISTORY] ?? {}
+        const nextHistory = appendPeerHistory(history, peers, sampledAt)
+        if (nextHistory !== history) {
+          set((state) => ({
+            ...state,
+            config: { ...state.config, [ZerotierConfig.PEER_HISTORY]: nextHistory },
+          }))
+        }
+        return nextHistory
       },
       disconnectNetwork: async (networkId: string) => {
         await leaveNetwork(networkId)

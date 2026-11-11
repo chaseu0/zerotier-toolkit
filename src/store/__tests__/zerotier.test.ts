@@ -1,5 +1,6 @@
 import { mockPeers } from '../../__mocks__/zerotier.ts'
 import { ZerotierConfig } from '../../typings/config.ts'
+import { PEER_HISTORY_INTERVAL_MS } from '../../utils/helpers/peerHistory.ts'
 import { mockConfigIPC } from '../../utils/testUtils/tauriMocks.ts'
 import { useZeroTierStore } from '../zerotier.ts'
 
@@ -46,5 +47,18 @@ describe('zerotier store', () => {
     getState().setConfig({ [ZerotierConfig.TOKEN]: 'local-token' })
 
     expect(getState().config[ZerotierConfig.TOKEN]).toBe('local-token')
+  })
+
+  it('should persist peer history samples and throttle sampling to once per minute', () => {
+    setState({ config: {} })
+    const peer = mockPeers[0]
+    const sampledAt = 100_000
+
+    getState().recordPeerSamples([peer], sampledAt)
+    getState().recordPeerSamples([peer], sampledAt + PEER_HISTORY_INTERVAL_MS - 1)
+    expect(getState().config[ZerotierConfig.PEER_HISTORY]?.[peer.address!]).toHaveLength(1)
+
+    getState().recordPeerSamples([peer], sampledAt + PEER_HISTORY_INTERVAL_MS)
+    expect(getState().config[ZerotierConfig.PEER_HISTORY]?.[peer.address!]).toHaveLength(2)
   })
 })

@@ -5,9 +5,17 @@ import { Trans } from 'react-i18next'
 
 import { RefreshIcon } from '../../../components/base/Icon.tsx'
 import RefreshButton from '../../../components/base/RefreshButton.tsx'
-import { Peer } from '../../../typings/zerotier.ts'
+import { Peer, PeerHistory } from '../../../typings/zerotier.ts'
 import PeerDetailsModal from './PeerDetailsModal.tsx'
-import { activePaths, connectionChip, isRootPeer, PeerConnection, peerConnection, peerLatency } from './peerHelpers.ts'
+import {
+  activePaths,
+  connectionChip,
+  isRootPeer,
+  PeerConnection,
+  peerConnection,
+  peerLastReceive,
+  peerLatency,
+} from './peerHelpers.ts'
 
 const columns = [
   { key: 'address', label: 'ADDRESS' },
@@ -15,6 +23,7 @@ const columns = [
   { key: 'connection', label: 'CONNECTION' },
   { key: 'latency', label: 'LATENCY', align: 'end' as const },
   { key: 'path', label: 'PATH' },
+  { key: 'lastReceive', label: 'LAST RECEIVE' },
 ]
 
 const roleText: Record<string, string> = {
@@ -42,12 +51,14 @@ function PeersTable({
   isError,
   isRefreshing,
   onRefresh,
+  history,
 }: {
   peers: Peer[]
   isLoading?: boolean
   isError?: boolean
   isRefreshing?: boolean
   onRefresh?: () => void
+  history?: PeerHistory
 }) {
   const sortedPeers = [...peers].sort((a, b) => {
     const role = (roleWeight[a.role ?? ''] ?? 3) - (roleWeight[b.role ?? ''] ?? 3)
@@ -146,6 +157,24 @@ function PeersTable({
           </div>
         )
       }
+      case 'lastReceive': {
+        const lastReceive = peerLastReceive(peer)
+        if (!lastReceive) {
+          return <span className="text-default-500">{t('No activity')}</span>
+        }
+        const seconds = Math.max(0, Math.floor((Date.now() - lastReceive) / 1000))
+        if (seconds < 10) {
+          return <span>{t('now')}</span>
+        }
+        if (seconds < 60) {
+          return <span>{t('{{count}} seconds ago', { count: seconds })}</span>
+        }
+        const minutes = Math.floor(seconds / 60)
+        if (minutes < 60) {
+          return <span>{t('{{count}} minutes ago', { count: minutes })}</span>
+        }
+        return <span>{t('{{count}} hours ago', { count: Math.floor(minutes / 60) })}</span>
+      }
       default:
         return <span className="font-mono">{peer.address}</span>
     }
@@ -213,7 +242,11 @@ function PeersTable({
           </TableBody>
         </Table>
       </div>
-      <PeerDetailsModal peer={selectedPeer} onClose={() => setSelectedPeer(undefined)} />
+      <PeerDetailsModal
+        peer={selectedPeer}
+        history={selectedPeer?.address ? history?.[selectedPeer.address] : undefined}
+        onClose={() => setSelectedPeer(undefined)}
+      />
     </>
   )
 }
