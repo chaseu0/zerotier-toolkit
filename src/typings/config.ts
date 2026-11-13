@@ -1,5 +1,5 @@
 import { Language, Theme } from './enum.ts'
-import { Network, PeerHistory } from './zerotier.ts'
+import { Network, PeerHistory, PeerMetadataMap } from './zerotier.ts'
 
 export enum ConfigType {
   APP = 'system',
@@ -26,6 +26,7 @@ export enum ZerotierConfig {
   PORT = 'Zerotier.Port',
   NETWORKS = 'Zerotier.Networks',
   PEER_HISTORY = 'Zerotier.PeerHistory',
+  PEER_METADATA = 'Zerotier.PeerMetadata',
 }
 
 export type AppConfig = {
@@ -42,4 +43,5 @@ export type ZeroTierConfig = {
   [ZerotierConfig.PORT]?: number
   [ZerotierConfig.NETWORKS]?: Network[]
   [ZerotierConfig.PEER_HISTORY]?: PeerHistory
+  [ZerotierConfig.PEER_METADATA]?: PeerMetadataMap
 }

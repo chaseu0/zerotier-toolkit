@@ -34,6 +34,8 @@ export enum InvokeEvent {
   PUT_CONFIGURATIONS = 'put_configurations',
   RESET_CONFIGURATIONS = 'reset_configurations',
   GET_LATEST_VERSION = 'get_latest_version_command',
+  PING_IP = 'ping_ip',
+  TRACE_ROUTE = 'trace_route',
 }
 
 export enum Theme {

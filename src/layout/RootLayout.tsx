@@ -73,6 +73,12 @@ function RootLayout() {
           startContent: <PeersIcon {...iconProps} />,
           description: 'Nodes linked with this device',
         },
+        {
+          path: '/zerotier/diagnostics',
+          title: 'Network Diagnostics',
+          startContent: <InterrogationIcon {...iconProps} />,
+          description: 'Automatic peer route monitoring',
+        },
         // #if WINDOWS
         {
           path: '/zerotier/service',

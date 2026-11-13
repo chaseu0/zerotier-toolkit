@@ -6,6 +6,7 @@ import { SearchIcon } from '../../../components/base/Icon.tsx'
 import RefreshButton from '../../../components/base/RefreshButton.tsx'
 import { useZeroTierStore } from '../../../store/zerotier.ts'
 import { ZerotierConfig } from '../../../typings/config.ts'
+import { PeerMetadata } from '../../../typings/zerotier.ts'
 import useRequest from '../../../utils/hooks/useRequest.ts'
 import { connectionChip, peerConnection } from './peerHelpers.ts'
 import PeersTable from './PeersTable.tsx'
@@ -15,7 +16,8 @@ const AUTO_REFRESH_INTERVAL_MS = 5000
 function ZerotierPeers() {
   const { t } = useTranslation()
   const { request } = useRequest()
-  const { peers, getPeers, config } = useZeroTierStore()
+  const { peers, getPeers, config, setConfig } = useZeroTierStore()
+  const peerMetadata = config[ZerotierConfig.PEER_METADATA] ?? {}
 
   const [isLoading, setIsLoading] = useState(!peers.length)
   const [isError, setIsError] = useState(false)
@@ -70,9 +72,22 @@ function ZerotierPeers() {
       peer.role?.toLowerCase().includes(keyword) ||
       peer.version?.includes(keyword) ||
       peer.paths?.some((path) => path.address?.toLowerCase().includes(keyword)) ||
+      peerMetadata[peer.address ?? '']?.displayName?.toLowerCase().includes(keyword) ||
+      peerMetadata[peer.address ?? '']?.managedAddresses?.some((address) => address.toLowerCase().includes(keyword)) ||
+      peerMetadata[peer.address ?? '']?.tags?.some((tag) => tag.toLowerCase().includes(keyword)) ||
       t(connectionChip[peerConnection(peer)].label).toLowerCase().includes(keyword)
     )
   })
+
+  const savePeerMetadata = (address: string, metadata: PeerMetadata) => {
+    const nextMetadata = { ...peerMetadata }
+    if (!metadata.displayName && !metadata.managedAddresses?.length && !metadata.tags?.length) {
+      delete nextMetadata[address]
+    } else {
+      nextMetadata[address] = metadata
+    }
+    setConfig({ [ZerotierConfig.PEER_METADATA]: nextMetadata })
+  }
 
   return (
     <div className="h-full flex flex-col gap-3">
@@ -118,6 +133,8 @@ function ZerotierPeers() {
         isRefreshing={isRefreshing}
         onRefresh={onRefresh}
         history={config[ZerotierConfig.PEER_HISTORY]}
+        peerMetadata={peerMetadata}
+        onSavePeerMetadata={savePeerMetadata}
       />
     </div>
   )

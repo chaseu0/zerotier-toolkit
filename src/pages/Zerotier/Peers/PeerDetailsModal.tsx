@@ -1,10 +1,10 @@
-import { Chip, Divider, Modal, ModalBody, ModalContent, ModalHeader } from '@heroui/react'
-import { ReactNode } from 'react'
+import { Button, Chip, Divider, Input, Modal, ModalBody, ModalContent, ModalHeader } from '@heroui/react'
+import { ReactNode, useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 
 import CopyText from '../../../components/base/CopyText.tsx'
 import { CopyIcon } from '../../../components/base/Icon.tsx'
-import { Path, Peer, PeerHistorySample } from '../../../typings/zerotier.ts'
+import { Path, Peer, PeerHistorySample, PeerMetadata } from '../../../typings/zerotier.ts'
 import { activePaths, connectionChip, isRootPeer, peerConnection, peerLastReceive, peerLatency } from './peerHelpers.ts'
 
 const formatTime = (timestamp?: number) =>
@@ -130,16 +130,44 @@ function PeerHistoryChart({ samples }: { samples: PeerHistorySample[] }) {
 function PeerDetailsModal({
   peer,
   history = [],
+  metadata,
+  onSaveMetadata,
   onClose,
 }: {
   peer?: Peer
   history?: PeerHistorySample[]
+  metadata?: PeerMetadata
+  onSaveMetadata?: (address: string, metadata: PeerMetadata) => void
   onClose: () => void
 }) {
   const { t } = useTranslation()
+  const [displayName, setDisplayName] = useState('')
+  const [managedAddresses, setManagedAddresses] = useState('')
+  const [tags, setTags] = useState('')
+
+  useEffect(() => {
+    setDisplayName(metadata?.displayName ?? '')
+    setManagedAddresses(metadata?.managedAddresses?.join(', ') ?? '')
+    setTags(metadata?.tags?.join(', ') ?? '')
+  }, [peer?.address, metadata])
 
   if (!peer) {
     return null
+  }
+
+  const saveMetadata = () => {
+    onSaveMetadata?.(peer.address ?? '', {
+      displayName: displayName.trim(),
+      managedAddresses: managedAddresses
+        .split(/[\s,，]+/)
+        .map((value) => value.trim())
+        .filter(Boolean),
+      tags: tags
+        .split(/[,，]/)
+        .map((value) => value.trim())
+        .filter(Boolean),
+    })
+    onClose()
   }
 
   const connection = peerConnection(peer)
@@ -192,6 +220,32 @@ function PeerDetailsModal({
                 <Trans>Enabled</Trans>
               </DetailItem>
             )}
+          </div>
+          <Divider className="my-2" />
+          <div className="flex flex-col gap-3">
+            <p className="text-tiny text-default-500">
+              <Trans>Local peer labels do not change ZeroTier Central metadata.</Trans>
+            </p>
+            <Input size="sm" label={t('Display name')} value={displayName} onValueChange={setDisplayName} />
+            <Input
+              size="sm"
+              label={t('Managed IP addresses')}
+              description={t('Enter the peer IP assigned inside your ZeroTier network')}
+              value={managedAddresses}
+              onValueChange={setManagedAddresses}
+            />
+            <Input
+              size="sm"
+              label={t('Tags')}
+              description={t('Separate tags with commas')}
+              value={tags}
+              onValueChange={setTags}
+            />
+            <div className="flex justify-end">
+              <Button size="sm" color="primary" variant="flat" onPress={saveMetadata}>
+                <Trans>Save local details</Trans>
+              </Button>
+            </div>
           </div>
           {!isRootPeer(peer) && connection !== 'direct' && (
             <p className="text-tiny text-default-500">

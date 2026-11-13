@@ -140,6 +140,14 @@ export interface PeerHistorySample {
 
 export type PeerHistory = Record<string, PeerHistorySample[]>
 
+export interface PeerMetadata {
+  displayName?: string
+  managedAddresses?: string[]
+  tags?: string[]
+}
+
+export type PeerMetadataMap = Record<string, PeerMetadata>
+
 export interface Path {
   active?: boolean
   address?: string

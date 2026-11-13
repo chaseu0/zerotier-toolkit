@@ -5,7 +5,7 @@ import { Trans } from 'react-i18next'
 
 import { RefreshIcon } from '../../../components/base/Icon.tsx'
 import RefreshButton from '../../../components/base/RefreshButton.tsx'
-import { Peer, PeerHistory } from '../../../typings/zerotier.ts'
+import { Peer, PeerHistory, PeerMetadata, PeerMetadataMap } from '../../../typings/zerotier.ts'
 import PeerDetailsModal from './PeerDetailsModal.tsx'
 import {
   activePaths,
@@ -18,7 +18,9 @@ import {
 } from './peerHelpers.ts'
 
 const columns = [
-  { key: 'address', label: 'ADDRESS' },
+  { key: 'address', label: 'NODE ID' },
+  { key: 'managedAddresses', label: 'ZT IP' },
+  { key: 'identity', label: 'NAME / TAGS' },
   { key: 'role', label: 'ROLE' },
   { key: 'connection', label: 'CONNECTION' },
   { key: 'latency', label: 'LATENCY', align: 'end' as const },
@@ -52,6 +54,8 @@ function PeersTable({
   isRefreshing,
   onRefresh,
   history,
+  peerMetadata = {},
+  onSavePeerMetadata,
 }: {
   peers: Peer[]
   isLoading?: boolean
@@ -59,6 +63,8 @@ function PeersTable({
   isRefreshing?: boolean
   onRefresh?: () => void
   history?: PeerHistory
+  peerMetadata?: PeerMetadataMap
+  onSavePeerMetadata?: (address: string, metadata: PeerMetadata) => void
 }) {
   const sortedPeers = [...peers].sort((a, b) => {
     const role = (roleWeight[a.role ?? ''] ?? 3) - (roleWeight[b.role ?? ''] ?? 3)
@@ -104,81 +110,119 @@ function PeersTable({
     return () => scrollContainer.removeEventListener('wheel', preventBackgroundWheel)
   }, [selectedPeer])
 
-  const renderCell = useCallback((peer: Peer, columnKey: string) => {
-    switch (columnKey) {
-      case 'role':
-        return (
-          <Chip
-            size="sm"
-            variant="flat"
-            className={peer.role === 'LEAF' ? 'bg-default-200' : 'bg-default-100'}
-            classNames={{ content: roleText[peer.role ?? ''] ?? 'text-default-600' }}
-          >
-            {peer.role ?? t('Unknown')}
-          </Chip>
-        )
-      case 'connection': {
-        if (isRootPeer(peer)) {
+  const renderCell = useCallback(
+    (peer: Peer, columnKey: string) => {
+      const metadata = peerMetadata[peer.address ?? '']
+      switch (columnKey) {
+        case 'managedAddresses':
+          return metadata?.managedAddresses?.length ? (
+            <div className="flex flex-col gap-0.5 font-mono text-tiny">
+              {metadata.managedAddresses.map((address) => (
+                <span key={address}>{address}</span>
+              ))}
+              <span className="font-sans text-[10px] text-default-400">{t('Manual mapping')}</span>
+            </div>
+          ) : (
+            <span className="text-default-400">-</span>
+          )
+        case 'identity':
           return (
-            <Chip size="sm" variant="flat">
-              {t('Root server')}
+            <div className="flex min-w-[120px] flex-col gap-1">
+              <span>{metadata?.displayName || <span className="text-default-400">{t('No local name')}</span>}</span>
+              <div className="flex flex-wrap gap-1">
+                {metadata?.tags?.length ? (
+                  metadata.tags.map((tag) => (
+                    <Chip
+                      key={tag}
+                      size="sm"
+                      variant="flat"
+                      className="h-5 bg-default-100"
+                      classNames={{ content: 'text-tiny' }}
+                    >
+                      {tag}
+                    </Chip>
+                  ))
+                ) : (
+                  <span className="text-tiny text-default-400">{t('No local tags')}</span>
+                )}
+              </div>
+            </div>
+          )
+        case 'role':
+          return (
+            <Chip
+              size="sm"
+              variant="flat"
+              className={peer.role === 'LEAF' ? 'bg-default-200' : 'bg-default-100'}
+              classNames={{ content: roleText[peer.role ?? ''] ?? 'text-default-600' }}
+            >
+              {peer.role ?? t('Unknown')}
+            </Chip>
+          )
+        case 'connection': {
+          if (isRootPeer(peer)) {
+            return (
+              <Chip size="sm" variant="flat">
+                {t('Root server')}
+              </Chip>
+            )
+          }
+          const connection = connectionChip[peerConnection(peer)]
+          return (
+            <Chip size="sm" variant="flat" color={connection.color}>
+              {t(connection.label)}
             </Chip>
           )
         }
-        const connection = connectionChip[peerConnection(peer)]
-        return (
-          <Chip size="sm" variant="flat" color={connection.color}>
-            {t(connection.label)}
-          </Chip>
-        )
-      }
-      case 'latency': {
-        const latency = peerLatency(peer)
-        return latency === undefined ? (
-          <span className="text-default-500">-</span>
-        ) : (
-          <span className={latencyClass(latency)}>{latency} ms</span>
-        )
-      }
-      case 'path': {
-        const paths = activePaths(peer)
-        const path = paths.find((path) => path.preferred) ?? paths[0]
-        return (
-          <div className="flex flex-col">
-            <span
-              className={path?.address ? 'block max-w-[160px] truncate font-mono' : 'block text-default-500'}
-              title={path?.address}
-            >
-              {path?.address ?? t('No path')}
-            </span>
-            {!isRootPeer(peer) && paths.length > 1 && (
-              <span className="text-tiny text-default-500">{t('{{count}} paths', { count: paths.length })}</span>
-            )}
-          </div>
-        )
-      }
-      case 'lastReceive': {
-        const lastReceive = peerLastReceive(peer)
-        if (!lastReceive) {
-          return <span className="text-default-500">{t('No activity')}</span>
+        case 'latency': {
+          const latency = peerLatency(peer)
+          return latency === undefined ? (
+            <span className="text-default-500">-</span>
+          ) : (
+            <span className={latencyClass(latency)}>{latency} ms</span>
+          )
         }
-        const seconds = Math.max(0, Math.floor((Date.now() - lastReceive) / 1000))
-        if (seconds < 10) {
-          return <span>{t('now')}</span>
+        case 'path': {
+          const paths = activePaths(peer)
+          const path = paths.find((path) => path.preferred) ?? paths[0]
+          return (
+            <div className="flex flex-col">
+              <span
+                className={path?.address ? 'block max-w-[160px] truncate font-mono' : 'block text-default-500'}
+                title={path?.address}
+              >
+                {path?.address ?? t('No path')}
+              </span>
+              {!isRootPeer(peer) && paths.length > 1 && (
+                <span className="text-tiny text-default-500">{t('{{count}} paths', { count: paths.length })}</span>
+              )}
+            </div>
+          )
         }
-        if (seconds < 60) {
-          return <span>{t('{{count}} seconds ago', { count: seconds })}</span>
+        case 'lastReceive': {
+          const lastReceive = peerLastReceive(peer)
+          if (!lastReceive) {
+            return <span className="text-default-500">{t('No activity')}</span>
+          }
+          const seconds = Math.max(0, Math.floor((Date.now() - lastReceive) / 1000))
+          if (seconds < 10) {
+            return <span>{t('now')}</span>
+          }
+          if (seconds < 60) {
+            return <span>{t('{{count}} seconds ago', { count: seconds })}</span>
+          }
+          const minutes = Math.floor(seconds / 60)
+          if (minutes < 60) {
+            return <span>{t('{{count}} minutes ago', { count: minutes })}</span>
+          }
+          return <span>{t('{{count}} hours ago', { count: Math.floor(minutes / 60) })}</span>
         }
-        const minutes = Math.floor(seconds / 60)
-        if (minutes < 60) {
-          return <span>{t('{{count}} minutes ago', { count: minutes })}</span>
-        }
-        return <span>{t('{{count}} hours ago', { count: Math.floor(minutes / 60) })}</span>
+        default:
+          return <span className="font-mono">{peer.address}</span>
       }
-      default:
-        return <span className="font-mono">{peer.address}</span>
-    }
-  }, [])
+    },
+    [peerMetadata],
+  )
 
   return (
     <>
@@ -245,6 +289,8 @@ function PeersTable({
       <PeerDetailsModal
         peer={selectedPeer}
         history={selectedPeer?.address ? history?.[selectedPeer.address] : undefined}
+        metadata={selectedPeer?.address ? peerMetadata[selectedPeer.address] : undefined}
+        onSaveMetadata={onSavePeerMetadata}
         onClose={() => setSelectedPeer(undefined)}
       />
     </>

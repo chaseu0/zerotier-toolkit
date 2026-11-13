@@ -1,7 +1,7 @@
 import './App.css'
 
 import { HeroUIProvider } from '@heroui/react'
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Route, Routes, useNavigate } from 'react-router-dom'
 
 import LanguageProvider from './components/providers/LanguageProvider.tsx'
@@ -10,9 +10,7 @@ import ThemeProvider from './components/providers/ThemeProvider.tsx'
 import TrayProvider from './components/providers/TrayProvider.tsx'
 import RootLayout from './layout/RootLayout.tsx'
 import About from './pages/About.tsx'
-// #if DEV
-import Dev from './pages/Dev'
-// #endif
+import NetworkDiagnostics from './pages/NetworkDiagnostics.tsx'
 import AppearanceSetting from './pages/Settings/AppearanceSetting.tsx'
 import GeneralSetting from './pages/Settings/GeneralSetting.tsx'
 import Troubleshooting from './pages/Troubleshooting.tsx'
@@ -25,6 +23,10 @@ import { useAppStore } from './store/app'
 import { useZeroTierStore } from './store/zerotier'
 import { showWindow } from './utils/helpers/tauriHelpers.ts'
 import useTauriEventListener from './utils/hooks/useTauriEventListener.ts'
+
+// #if DEV
+const Dev = lazy(() => import('./pages/Dev'))
+// #endif
 
 function App() {
   const navigate = useNavigate()
@@ -80,6 +82,7 @@ function App() {
                     <Route path="/zerotier/networks" element={<ZerotierNetworks />} />
                     <Route path="/zerotier/status" element={<ZerotierStatus />} />
                     <Route path="/zerotier/peers" element={<ZerotierPeers />} />
+                    <Route path="/zerotier/diagnostics" element={<NetworkDiagnostics />} />
                     <Route path="/zerotier/service" element={<ZerotierService />} />
                     <Route path="/zerotier/experiments" element={<ZerotierExperiments />} />
                     <Route path="/settings" element={<AppearanceSetting />} />
@@ -90,7 +93,14 @@ function App() {
                     <Route path="*" element={<ZerotierNetworks />} />
                   </Route>
                   {/* #if DEV */}
-                  <Route path="/dev" element={<Dev />} />
+                  <Route
+                    path="/dev"
+                    element={
+                      <Suspense fallback={null}>
+                        <Dev />
+                      </Suspense>
+                    }
+                  />
                   {/* #endif  */}
                 </Routes>
               </div>

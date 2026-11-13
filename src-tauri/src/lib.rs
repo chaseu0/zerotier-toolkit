@@ -26,6 +26,7 @@ mod command;
 
 mod auto_launch;
 mod configurations;
+mod network_diagnostics;
 mod r;
 mod system;
 mod system_tray;
@@ -130,7 +131,9 @@ fn register_invoke_handlers(builder: Builder<Wry>) -> Builder<Wry> {
         // other handlers
         is_admin,
         restart_as_admin,
-        get_latest_version_command
+        get_latest_version_command,
+        network_diagnostics::ping_ip,
+        network_diagnostics::trace_route
     ]);
     builder
 }
@@ -150,7 +153,7 @@ fn init_window(app_handle: &AppHandle) {
         tauri::WebviewUrl::App("index.html".into()),
     )
         .title("ZeroTier Toolkit - Build By Tauri")
-        .resizable(false)
+        .resizable(true)
         .maximized(false)
         .fullscreen(false)
         .transparent(true)
@@ -158,7 +161,7 @@ fn init_window(app_handle: &AppHandle) {
         .shadow(true)
         .center()
         .min_inner_size(800.0, 500.0)
-        .inner_size(800.0, 500.0)
+        .inner_size(1000.0, 680.0)
         .build()
         .unwrap();
     let _ = get_configuration_context(SYSTEM_CONFIGURATION_NAME).is_some_and(|context| {
