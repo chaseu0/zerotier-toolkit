@@ -6,6 +6,7 @@ import { Trans } from 'react-i18next'
 import { RefreshIcon } from '../../../components/base/Icon.tsx'
 import RefreshButton from '../../../components/base/RefreshButton.tsx'
 import { Peer, PeerHistory, PeerMetadata, PeerMetadataMap } from '../../../typings/zerotier.ts'
+import { PeerDisplayRecord } from '../../../utils/helpers/peerRoster.ts'
 import PeerDetailsModal from './PeerDetailsModal.tsx'
 import {
   activePaths,
@@ -23,6 +24,8 @@ const columns = [
   { key: 'identity', label: 'NAME / TAGS' },
   { key: 'role', label: 'ROLE' },
   { key: 'connection', label: 'CONNECTION' },
+  { key: 'observation', label: 'LOCAL OBSERVATION' },
+  { key: 'version', label: 'VERSION' },
   { key: 'latency', label: 'LATENCY', align: 'end' as const },
   { key: 'path', label: 'PATH' },
   { key: 'lastReceive', label: 'LAST RECEIVE' },
@@ -57,7 +60,7 @@ function PeersTable({
   peerMetadata = {},
   onSavePeerMetadata,
 }: {
-  peers: Peer[]
+  peers: PeerDisplayRecord[]
   isLoading?: boolean
   isError?: boolean
   isRefreshing?: boolean
@@ -84,7 +87,13 @@ function PeersTable({
   })
   const [selectedPeer, setSelectedPeer] = useState<Peer>()
   const [selectedKeys, setSelectedKeys] = useState<Set<string | number> | 'all'>(new Set())
+  const [now, setNow] = useState(Date.now())
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const openPeer = (keys: Set<string | number> | 'all') => {
     if (keys === 'all') {
@@ -111,16 +120,21 @@ function PeersTable({
   }, [selectedPeer])
 
   const renderCell = useCallback(
-    (peer: Peer, columnKey: string) => {
+    (peer: PeerDisplayRecord, columnKey: string) => {
       const metadata = peerMetadata[peer.address ?? '']
       switch (columnKey) {
         case 'managedAddresses':
-          return metadata?.managedAddresses?.length ? (
+          return metadata?.managedAddresses?.length || peer.rosterEntry?.managedAddresses.length ? (
             <div className="flex flex-col gap-0.5 font-mono text-tiny">
-              {metadata.managedAddresses.map((address) => (
+              {(metadata?.managedAddresses?.length
+                ? metadata.managedAddresses
+                : (peer.rosterEntry?.managedAddresses ?? [])
+              ).map((address) => (
                 <span key={address}>{address}</span>
               ))}
-              <span className="font-sans text-[10px] text-default-400">{t('Manual mapping')}</span>
+              {!metadata?.managedAddresses?.length && peer.rosterEntry && (
+                <span className="font-sans text-[10px] text-default-400">{t('Public roster')}</span>
+              )}
             </div>
           ) : (
             <span className="text-default-400">-</span>
@@ -128,7 +142,11 @@ function PeersTable({
         case 'identity':
           return (
             <div className="flex min-w-[120px] flex-col gap-1">
-              <span>{metadata?.displayName || <span className="text-default-400">{t('No local name')}</span>}</span>
+              <span>
+                {metadata?.displayName || peer.rosterEntry?.displayName || (
+                  <span className="text-default-400">{t('No local name')}</span>
+                )}
+              </span>
               <div className="flex flex-wrap gap-1">
                 {metadata?.tags?.length ? (
                   metadata.tags.map((tag) => (
@@ -160,6 +178,13 @@ function PeersTable({
             </Chip>
           )
         case 'connection': {
+          if (!peer.locallyObserved) {
+            return (
+              <Chip size="sm" variant="flat" color="warning">
+                {t('Not observed locally')}
+              </Chip>
+            )
+          }
           if (isRootPeer(peer)) {
             return (
               <Chip size="sm" variant="flat">
@@ -174,6 +199,27 @@ function PeersTable({
             </Chip>
           )
         }
+        case 'observation':
+          return peer.locallyObserved ? (
+            activePaths(peer).length ? (
+              <span className="text-success">{t('Peer endpoint reported')}</span>
+            ) : (
+              <span className="text-warning">{t('No active endpoint reported')}</span>
+            )
+          ) : (
+            <span className="max-w-[260px] whitespace-normal text-warning">
+              {t('Not returned by local /peer API; online and authorization state cannot be determined here.')}
+            </span>
+          )
+        case 'version':
+          return (
+            <div className="flex flex-col">
+              <span>{peer.version && !peer.version.startsWith('-') ? peer.version : '-'}</span>
+              {peer.rosterEntry?.platform && (
+                <span className="text-tiny text-default-400">{peer.rosterEntry.platform}</span>
+              )}
+            </div>
+          )
         case 'latency': {
           const latency = peerLatency(peer)
           return latency === undefined ? (
@@ -204,7 +250,7 @@ function PeersTable({
           if (!lastReceive) {
             return <span className="text-default-500">{t('No activity')}</span>
           }
-          const seconds = Math.max(0, Math.floor((Date.now() - lastReceive) / 1000))
+          const seconds = Math.max(0, Math.floor((now - lastReceive) / 1000))
           if (seconds < 10) {
             return <span>{t('now')}</span>
           }

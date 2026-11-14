@@ -22,7 +22,7 @@ export const peerConnection = (peer: Peer): PeerConnection => {
   if (activePaths(peer).length) {
     return 'direct'
   }
-  return isRootPeer(peer) ? 'idle' : 'relayed'
+  return 'idle'
 }
 
 export const peerLatency = (peer: Peer) =>

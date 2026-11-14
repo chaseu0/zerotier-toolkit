@@ -1,0 +1,11 @@
+[
+  { "address": "1cdb478fad", "displayName": "macos", "managedAddresses": ["10.6.1.2"], "platform": "macOS" },
+  { "address": "f133c3a6ec", "displayName": "iphone", "managedAddresses": ["10.6.1.4"], "platform": "iOS (iPhone)" },
+  { "address": "1b1a66e875", "displayName": "wsl2", "managedAddresses": ["10.6.1.6"], "platform": "Linux" },
+  { "address": "a6a9ac290e", "displayName": "machome", "managedAddresses": ["10.6.1.5"], "platform": "macOS" },
+  { "address": "d583f50c7f", "displayName": "VMOS", "managedAddresses": ["10.6.1.7"], "platform": "Linux" },
+  { "address": "c1a644f57e", "displayName": "winhome", "managedAddresses": ["10.6.1.8"], "platform": "Windows" },
+  { "address": "e56060113c", "displayName": "KK", "managedAddresses": ["10.6.1.9"], "platform": "iOS (iPhone)" },
+  { "address": "ef06916aad", "displayName": "windani", "managedAddresses": ["10.6.1.3"], "platform": "Windows" },
+  { "address": "f46bff6b1c", "displayName": "XIPKVM", "managedAddresses": ["10.6.1.10"], "platform": "Linux" }
+]

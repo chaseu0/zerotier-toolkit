@@ -7,6 +7,7 @@ import RefreshButton from '../../../components/base/RefreshButton.tsx'
 import { useZeroTierStore } from '../../../store/zerotier.ts'
 import { ZerotierConfig } from '../../../typings/config.ts'
 import { PeerMetadata } from '../../../typings/zerotier.ts'
+import { mergePeerRoster } from '../../../utils/helpers/peerRoster.ts'
 import useRequest from '../../../utils/hooks/useRequest.ts'
 import { connectionChip, peerConnection } from './peerHelpers.ts'
 import PeersTable from './PeersTable.tsx'
@@ -18,11 +19,13 @@ function ZerotierPeers() {
   const { request } = useRequest()
   const { peers, getPeers, config, setConfig } = useZeroTierStore()
   const peerMetadata = config[ZerotierConfig.PEER_METADATA] ?? {}
+  const displayPeers = mergePeerRoster(peers)
 
   const [isLoading, setIsLoading] = useState(!peers.length)
   const [isError, setIsError] = useState(false)
   const [isStale, setIsStale] = useState(false)
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number>()
+  const [clock, setClock] = useState(Date.now())
   const [isRefreshing, setIsRefreshing] = useState(false)
   const loadingRef = useRef(false)
 
@@ -58,6 +61,11 @@ function ZerotierPeers() {
     return () => window.clearInterval(interval)
   }, [loadPeers])
 
+  useEffect(() => {
+    const interval = window.setInterval(() => setClock(Date.now()), 1000)
+    return () => window.clearInterval(interval)
+  }, [])
+
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true)
     await loadPeers()
@@ -65,12 +73,15 @@ function ZerotierPeers() {
   }, [loadPeers])
 
   const [filterValue, setFilterValue] = useState('')
-  const filteredPeers = peers.filter((peer) => {
+  const filteredPeers = displayPeers.filter((peer) => {
     const keyword = filterValue.toLowerCase()
     return (
       peer.address?.includes(keyword) ||
       peer.role?.toLowerCase().includes(keyword) ||
       peer.version?.includes(keyword) ||
+      peer.rosterEntry?.displayName.toLowerCase().includes(keyword) ||
+      peer.rosterEntry?.platform?.toLowerCase().includes(keyword) ||
+      peer.rosterEntry?.managedAddresses.some((address) => address.toLowerCase().includes(keyword)) ||
       peer.paths?.some((path) => path.address?.toLowerCase().includes(keyword)) ||
       peerMetadata[peer.address ?? '']?.displayName?.toLowerCase().includes(keyword) ||
       peerMetadata[peer.address ?? '']?.managedAddresses?.some((address) => address.toLowerCase().includes(keyword)) ||
@@ -95,6 +106,9 @@ function ZerotierPeers() {
         <span className="flex-shrink-0 text-default-700">
           <Trans>Known peers</Trans>
         </span>
+        <span className="hidden text-tiny text-default-400 xl:inline">
+          <Trans>Shared device names and ZeroTier IPs come from the public peer roster file.</Trans>
+        </span>
         <Chip
           size="sm"
           variant="flat"
@@ -105,11 +119,11 @@ function ZerotierPeers() {
         </Chip>
         {lastUpdatedAt && (
           <span className="flex-shrink-0 text-tiny text-default-500">
-            {t('Updated at {{time}}', { time: new Date(lastUpdatedAt).toLocaleTimeString() })}
+            {t('Peer data refreshed {{seconds}} seconds ago', { seconds: Math.floor((clock - lastUpdatedAt) / 1000) })}
           </span>
         )}
         <Chip size="sm" variant="flat" className="flex-shrink-0 bg-default-100">
-          {filterValue ? `${filteredPeers.length}/${peers.length}` : peers.length}
+          {filterValue ? `${filteredPeers.length}/${displayPeers.length}` : displayPeers.length}
         </Chip>
         <Input
           isClearable

@@ -20,13 +20,13 @@ const createPath = (overrides: Partial<Path>): Path => ({
 describe('peerHelpers', () => {
   it('should classify peer connections', () => {
     expect(peerConnection(createPeer({ paths: [createPath({})] }))).toBe('direct')
-    expect(peerConnection(createPeer({ paths: [] }))).toBe('relayed')
+    expect(peerConnection(createPeer({ paths: [] }))).toBe('idle')
     expect(peerConnection(createPeer({ paths: [createPath({})], tunneled: true }))).toBe('tunneled')
     expect(peerConnection(createPeer({ role: 'PLANET', paths: [] }))).toBe('idle')
   })
 
   it('should ignore expired paths when checking the connection', () => {
-    expect(peerConnection(createPeer({ paths: [createPath({ active: false, expired: true })] }))).toBe('relayed')
+    expect(peerConnection(createPeer({ paths: [createPath({ active: false, expired: true })] }))).toBe('idle')
   })
 
   it('should ignore negative latency values', () => {

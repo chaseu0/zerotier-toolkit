@@ -95,6 +95,12 @@ function StatusDetails({ status }: { status?: Status }) {
           <DetailItem label="NAT Port Mapping">
             <Trans>{portMappingEnabled ? 'Enabled' : 'Not enabled'}</Trans>
           </DetailItem>
+          <DetailItem label="NAT Type">
+            <span>{t('Not exposed by the local ZeroTier API')}</span>
+            <span className="block">
+              {t('Use listening and surface addresses as traversal signals; this is not a NAT classification.')}
+            </span>
+          </DetailItem>
         </div>
         <div className="rounded-large bg-default-100 p-2.5 flex flex-col gap-2.5">
           <DetailItem label="Primary Port">{primaryPort ?? '-'}</DetailItem>

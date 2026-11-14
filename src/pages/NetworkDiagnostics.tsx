@@ -1,11 +1,12 @@
 import { Button, Chip, Spinner } from '@heroui/react'
 import { invoke } from '@tauri-apps/api/core'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 
 import { useZeroTierStore } from '../store/zerotier.ts'
 import { InvokeEvent } from '../typings/enum.ts'
 import { Peer } from '../typings/zerotier.ts'
+import { mergePeerRoster, PeerDisplayRecord } from '../utils/helpers/peerRoster.ts'
 import { mergeRouteHops, parseRouteHops, RouteHop } from '../utils/helpers/routeTrace.ts'
 
 const PEER_REFRESH_MS = 10_000
@@ -75,7 +76,11 @@ const pathIp = (address?: string) => address?.split('/')[0]
 function NetworkDiagnostics() {
   const { t } = useTranslation()
   const { peers, getPeers } = useZeroTierStore()
-  const peersRef = useRef(peers)
+  const monitoredPeers = useMemo(
+    () => mergePeerRoster(peers).filter((peer) => peer.role === 'LEAF' || peer.role === 'MOON'),
+    [peers],
+  )
+  const peersRef = useRef<PeerDisplayRecord[]>(monitoredPeers)
   const runningRef = useRef(false)
   const [isTracing, setIsTracing] = useState(false)
   const [traceByPeer, setTraceByPeer] = useState<PeerTraceCache>(loadTraceCache)
@@ -83,8 +88,8 @@ function NetworkDiagnostics() {
   const traceByPeerRef = useRef(traceByPeer)
 
   useEffect(() => {
-    peersRef.current = peers
-  }, [peers])
+    peersRef.current = monitoredPeers
+  }, [monitoredPeers])
 
   useEffect(() => {
     traceByPeerRef.current = traceByPeer
@@ -103,8 +108,11 @@ function NetworkDiagnostics() {
     if (runningRef.current) return
     const targets = peersRef.current
       .filter((peer) => peer.role === 'LEAF' || peer.role === 'MOON')
-      .map((peer) => ({ peer, target: pathIp(activePath(peer)?.address) }))
-      .filter((item): item is { peer: Peer; target: string } => {
+      .map((peer) => ({
+        peer,
+        target: pathIp(activePath(peer)?.address) ?? peer.rosterEntry?.managedAddresses[0],
+      }))
+      .filter((item): item is { peer: PeerDisplayRecord; target: string } => {
         if (!item.target) return false
         const cached = traceByPeerRef.current[item.peer.address ?? item.target]
         return force || !cached || cached.target !== item.target || Date.now() - cached.checkedAt >= TRACE_CACHE_TTL_MS
@@ -178,12 +186,10 @@ function NetworkDiagnostics() {
   }, [tracePeers])
 
   useEffect(() => {
-    if (peers.length && !runningRef.current) void tracePeers(false)
-  }, [peers, tracePeers])
+    if (monitoredPeers.length && !runningRef.current) void tracePeers(false)
+  }, [monitoredPeers, tracePeers])
 
-  const monitoredPeers = peers
-    .filter((peer) => peer.role === 'LEAF' || peer.role === 'MOON')
-    .sort((a, b) => (a.address ?? '').localeCompare(b.address ?? ''))
+  const sortedPeers = [...monitoredPeers].sort((a, b) => (a.address ?? '').localeCompare(b.address ?? ''))
   const lastUpdatedAt = Math.max(0, ...Object.values(traceByPeer).map(({ checkedAt }) => checkedAt))
   const updatedTime = lastUpdatedAt
     ? new Date(lastUpdatedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -216,7 +222,7 @@ function NetworkDiagnostics() {
       <p className="border-b border-default-200 py-3 text-tiny leading-5 text-default-500">
         <Trans>Peer route scope notice</Trans>
       </p>
-      {monitoredPeers.length === 0 ? (
+      {sortedPeers.length === 0 ? (
         <div className="py-8 text-center text-small text-default-500">
           <Trans>{loadError ? 'Failed to load peers' : 'No peer nodes available'}</Trans>
         </div>
@@ -236,10 +242,11 @@ function NetworkDiagnostics() {
               <Trans>Route hops (IP / RTT / loss)</Trans>
             </span>
           </div>
-          {monitoredPeers.map((peer) => {
+          {sortedPeers.map((peer) => {
             const key = peer.address ?? ''
             const path = activePath(peer)
-            const target = pathIp(path?.address)
+            const target = pathIp(path?.address) ?? peer.rosterEntry?.managedAddresses[0]
+            const isManagedTarget = !path?.address && Boolean(peer.rosterEntry?.managedAddresses[0])
             const trace = traceByPeer[key]
             const latency = typeof peer.latency === 'number' && peer.latency >= 0 ? peer.latency + ' ms' : '-'
             return (
@@ -249,17 +256,28 @@ function NetworkDiagnostics() {
               >
                 <div className="min-w-0">
                   <div className="truncate font-mono">{key || '-'}</div>
-                  <div className="text-tiny text-default-500">{peer.role}</div>
+                  <div className="truncate text-tiny text-default-500">
+                    {peer.rosterEntry?.displayName ?? peer.role}
+                    {peer.rosterEntry?.managedAddresses[0] ? ` · ${peer.rosterEntry.managedAddresses[0]}` : ''}
+                  </div>
+                  {!peer.locallyObserved && (
+                    <div className="text-tiny text-warning">
+                      <Trans>Not reported by this device; online state unknown</Trans>
+                    </div>
+                  )}
                 </div>
                 <div className="font-mono">{latency}</div>
                 <div className="min-w-0">
                   {target ? (
                     <span className="block truncate font-mono" title={path?.address}>
                       {target}
+                      {isManagedTarget ? ` (${t('ZeroTier IP')})` : ''}
                     </span>
                   ) : (
                     <span className="text-default-400">
-                      <Trans>No active path</Trans>
+                      <Trans>
+                        {peer.rosterEntry ? 'No active public endpoint; probing ZeroTier IP route' : 'No active path'}
+                      </Trans>
                     </span>
                   )}
                 </div>
